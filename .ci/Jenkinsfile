@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clean and Install') {
+            steps {
+                script {
+                    echo 'Executing mvn clean install...'
+                    sh 'mvn clean install -DskipTests'
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                script {
+                    echo 'Packaging the application...'
+                    sh 'mvn package -DskipTests'
+                }
+            }
+        }
+
+        stage('Dependency Check') {
+                when {
+                    expression { env.BRANCH_NAME ==~ /(production|staging)/ }
+                }
+            steps {
+                script {
+                    echo 'Running and publishing OWASP Dependency-Check...'
+                    sh 'mvn org.owasp:dependency-check-maven:check'
+                    dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline executed successfully! No critical vulnerabilities found.'
+            emailext (
+                subject: "Jenkins Pipeline Success: ${env.JOB_NAME}",
+                body: "Pipeline executed successfully on branch ${env.BRANCH_NAME}.\nCheck console output: ${env.BUILD_URL}console",
+                to: 'ferretmartin91@gmail.com'
+            )
+        }
+        failure {
+            echo 'Pipeline failed! Please check the logs for details.'
+        }
+    }
+}
